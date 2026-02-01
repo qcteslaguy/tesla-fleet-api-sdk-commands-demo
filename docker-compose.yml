@@ -1,0 +1,37 @@
+version: '3.8'
+
+services:
+  tesla-proxy:
+    image: tesla/vehicle-command:latest
+    container_name: tesla-http-proxy
+    ports:
+      - "4443:4443"
+    volumes:
+      - ./config:/config
+      - ./tesla-tokens.json:/app/tesla-tokens.json:ro
+    environment:
+      - TESLA_HTTP_PROXY_TLS_CERT=/config/tls-cert.pem
+      - TESLA_HTTP_PROXY_TLS_KEY=/config/tls-key.pem
+      - TESLA_HTTP_PROXY_HOST=0.0.0.0
+      - TESLA_HTTP_PROXY_PORT=4443
+      - TESLA_HTTP_PROXY_TIMEOUT=30s
+      - TESLA_VERBOSE=true
+    command: >
+      -tls-key /config/tls-key.pem
+      -cert /config/tls-cert.pem
+      -key-file /config/fleet-key.pem
+      -host 0.0.0.0
+      -port 4443
+    healthcheck:
+      test: ["CMD", "curl", "-f", "--cacert", "/config/tls-cert.pem", "https://localhost:4443/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+    networks:
+      - tesla-network
+
+networks:
+  tesla-network:
+    driver: bridge
