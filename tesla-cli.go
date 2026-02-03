@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
@@ -10,7 +11,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -19,6 +22,11 @@ type TeslaTokens struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
+}
+
+// isRunningOnMac checks if the code is running on macOS
+func isRunningOnMac() bool {
+	return runtime.GOOS == "darwin"
 }
 
 // loadEnvFile loads credentials from .env file
@@ -102,6 +110,64 @@ func authenticateAndGetTokens() (TeslaTokens, error) {
 
 	scopes := "openid offline_access vehicle_device_data vehicle_cmds vehicle_charging_cmds"
 
+	// Start callback server to capture authorization code
+	authCodeChan := make(chan string, 1)
+	errChan := make(chan error, 1)
+	var server *http.Server
+	var wg sync.WaitGroup
+
+	// Start local server to handle callback
+	mux := http.NewServeMux()
+	mux.HandleFunc("/callback", func(w http.ResponseWriter, r *http.Request) {
+		code := r.URL.Query().Get("code")
+		errParam := r.URL.Query().Get("error")
+
+		if errParam != "" {
+			msg := fmt.Sprintf("Authorization failed: %s", errParam)
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprintf(w, `<html><body><h1>Authorization Failed</h1><p>%s</p></body></html>`, msg)
+			errChan <- fmt.Errorf(msg)
+			return
+		}
+
+		if code == "" {
+			msg := "No authorization code received"
+			w.Header().Set("Content-Type", "text/html")
+			fmt.Fprintf(w, `<html><body><h1>Authorization Failed</h1><p>%s</p></body></html>`, msg)
+			errChan <- fmt.Errorf(msg)
+			return
+		}
+
+		// Send success response to browser
+		w.Header().Set("Content-Type", "text/html")
+		fmt.Fprintf(w, `<html><body><h1>✅ Authorization Successful!</h1><p>You can close this window and return to the terminal.</p></body></html>`)
+
+		// Send code to channel
+		authCodeChan <- code
+
+		// Shutdown server after callback
+		go func() {
+			time.Sleep(100 * time.Millisecond)
+			server.Shutdown(context.Background())
+		}()
+	})
+
+	server = &http.Server{
+		Addr:    ":8080",
+		Handler: mux,
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			errChan <- err
+		}
+	}()
+
+	// Give server a moment to start
+	time.Sleep(500 * time.Millisecond)
+
 	// Build OAuth URL
 	params := url.Values{}
 	params.Add("client_id", clientID)
@@ -118,14 +184,34 @@ func authenticateAndGetTokens() (TeslaTokens, error) {
 	fmt.Println(authURL)
 	fmt.Println()
 
-	// Try to open browser - Windows: use rundll32 for URLs
-	exec.Command("rundll32", "url.dll,FileProtocolHandler", authURL).Run()
+	// Try to open browser
+	// Windows: use rundll32, macOS: use open, Linux: use xdg-open
+	var cmd *exec.Cmd
+	switch {
+	case os.Getenv("OS") == "Windows_NT":
+		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", authURL)
+	case isRunningOnMac():
+		cmd = exec.Command("open", authURL)
+	default:
+		cmd = exec.Command("xdg-open", authURL)
+	}
+	cmd.Run()
 
-	time.Sleep(2 * time.Second)
+	fmt.Println("⏳ Waiting for authorization callback...")
 
-	fmt.Print("After logging in, paste the authorization CODE from the redirect URL: ")
-	code, _ := reader.ReadString('\n')
-	code = strings.TrimSpace(code)
+	// Wait for authorization code or error
+	var code string
+	select {
+	case code = <-authCodeChan:
+		fmt.Println("✅ Authorization code received!")
+	case err := <-errChan:
+		return TeslaTokens{}, err
+	case <-time.After(5 * time.Minute):
+		return TeslaTokens{}, fmt.Errorf("authorization timeout - please try again")
+	}
+
+	// Wait for server to finish
+	wg.Wait()
 
 	if code == "" {
 		return TeslaTokens{}, fmt.Errorf("no authorization code provided")
@@ -173,7 +259,7 @@ func authenticateAndGetTokens() (TeslaTokens, error) {
 	if stat, err := os.Stat(tokensPath); err == nil && stat.IsDir() {
 		os.RemoveAll(tokensPath)
 	}
-	file, err := os.Create(tokensPath)
+	file, err := os.OpenFile(tokensPath, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644)
 	if err != nil {
 		fmt.Printf("⚠️  Warning: Failed to save tokens to file: %v\n", err)
 	} else {
