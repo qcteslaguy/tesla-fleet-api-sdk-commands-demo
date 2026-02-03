@@ -1,0 +1,29 @@
+# Credentials & Secrets
+.env
+
+# OAuth Tokens
+tesla-tokens.json
+
+# Private Keys & Certificates
+*.pem
+*.key
+*.crt
+config/
+
+# Go binaries
+tesla-cli
+tesla-cli.exe
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
