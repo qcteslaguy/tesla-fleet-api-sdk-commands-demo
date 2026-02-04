@@ -21,6 +21,7 @@ Send commands to your Tesla using the official Vehicle Command SDK. Works locall
 - **Go 1.23+** - [Download here](https://golang.org/dl)
 - **Docker & Docker Compose** - [Download here](https://www.docker.com/products/docker-desktop)
 - **Your Vehicle VIN** - Find it in the Tesla App at the bottom of the screen.
+- **Git Bash or WSL** - A git bash terminal is best for this project but you could also use WSL or convert the .sh script to .bat if you know how.
 
 ### Step 1: Configure Credentials
 
