@@ -1,24 +1,26 @@
 # Tesla Fleet API SDK Command Demo (Go)
 
-Send commands to your Tesla using the official Vehicle Command SDK. Works locally with just your credentials - no AWS, no extra services needed.
+Send commands to your Tesla using the official Vehicle Command SDK. Works locally with just your credentials.
 
 **Supported commands:**
 - 🔒 Lock/Unlock doors
 - 🛡️ Sentry Mode on/off
-- And more via Tesla Fleet API
+- Other commands that can be implemented found [here](https://developer.tesla.com/docs/fleet-api/endpoints/vehicle-commands)
 
-> ⚠️ **Security Note:** Never commit `.env`, `tesla-tokens.json`, or files in `config/` to git - they contain secrets and private keys. These are already in `.gitignore`.
+> ⚠️ **Security Note:** Never commit `.env`, `tesla-tokens.json`, `.pem`, or files in `config/` to git - they contain secrets and private keys. These are already in `.gitignore`.
 
 ---
 
 ## ⚡ Quick Start (10 minutes)
 
 ### Prerequisites
+- **See My Previous Video** [YouTube](https://youtube.com/@quadcitiesteslaguy/playlist/Tesla Development) and follow the instructions in [GitHub](https://github.com/qcteslaguy/tesla-fleet-api-demo/README.md)
 - **Tesla Fleet API App** - [Set up at developer.tesla.com](https://developer.tesla.com)
   - Get your `CLIENT_ID` and `CLIENT_SECRET`
+- **Your Private and Public Key** - Actually only your private key from when you did the first tutorial. The public key is what you added to your vehicle via the https://tesla.com/_ak/your-url-from-first-tutorial. So as long as the public key still shows in locks you are good, so you only need the private key named as `private-key.pem` which will be copied to `config/fleet-key.pem` to sign the commands via the proxy.
 - **Go 1.23+** - [Download here](https://golang.org/dl)
 - **Docker & Docker Compose** - [Download here](https://www.docker.com/products/docker-desktop)
-- **Your Vehicle VIN** - Find it in Tesla: Settings > Software
+- **Your Vehicle VIN** - Find it in the Tesla App at the bottom of the screen.
 
 ### Step 1: Configure Credentials
 
@@ -33,11 +35,13 @@ cp .env.example .env
 TESLA_CLIENT_ID=your_client_id_from_developer.tesla.com
 TESLA_CLIENT_SECRET=your_client_secret
 TESLA_REDIRECT_URI=http://localhost:8080/callback
-TESLA_VEHICLE_VIN=5YJ3E1EA1KF123456
+TESLA_VEHICLE_VIN=your_vehicle_vin
 ```
 
-Find your VIN in your Tesla vehicle:
+You can also find your VIN in your Tesla vehicle:
 - **Settings > Software > VIN**
+
+Copy your private key from the previous tutorial to the root folder as `private-key.pem`.
 
 ### Step 2: Set Up Proxy (One Time)
 
@@ -47,7 +51,7 @@ bash setup-proxy.sh
 
 This generates:
 - TLS certificates (`config/tls-cert.pem`, `config/tls-key.pem`)
-- Fleet key configuration (`config/fleet-key.pem`)
+- Copies the `private-key.pem` to Fleet key configuration (`config/fleet-key.pem`)
 
 ### Step 3: Start the Docker Proxy
 
@@ -68,13 +72,13 @@ go run tesla-cli.go
 ```
 
 **What happens on first run:**
-1. Checks for saved OAuth tokens
-2. If none found, opens browser for Tesla login
-3. You approve the app
-4. Copy the authorization **code** from redirect URL
-5. Paste code into terminal
-6. Tokens saved to `tesla-tokens.json` ✅
-7. Interactive menu appears
+1. Checks for saved OAuth tokens in `tesla-tokens.json`
+2. If none found, uses the browser to get a code
+3. Once it gets the cod **should happen automatically**
+4. Tokens saved to `tesla-tokens.json` ✅
+5. Interactive menu appears
+
+**NOTE:** If you have any errors from above it is likely you didn't add http://localhost:8080/callback as a valid uri on developer.tesla.com for your app.
 
 **Menu:**
 ```
@@ -88,11 +92,19 @@ What would you like to do?
 Enter choice [1-5]: 
 ```
 
-That's it! Your vehicle commands work directly from your laptop.
+That's it! Your vehicle commands work directly from your computer.
 
+
+**Cleanup:**
+
+Run the followig when done to remove the proxy
+
+```bash
+docker-compose down
+```
 ---
 
-## � Alternative: Kubernetes Deployment (Kind + Helm)
+## � Alternative: Kubernetes Deployment (Kind + Helm) of a proxy on Windows
 
 For advanced users who want to run the proxy in Kubernetes instead of Docker Compose.
 
@@ -163,10 +175,10 @@ kind delete cluster --name tesla-proxy
 **First Time:**
 1. Run `go run tesla-cli.go`
 2. Browser opens (or URL shown in terminal)
-3. Log in to your Tesla account
-4. Approve the application
-5. Copy authorization code from redirect
-6. Paste into terminal
+3. Log in to your Tesla account if not logged in first
+4. Approve the application if necessary
+5. Copy authorization code from redirect or get automatically
+6. Paste into terminal or retrieve automatically
 7. Done! Tokens saved ✅
 
 **Future Runs:**
@@ -223,16 +235,18 @@ kind delete cluster --name tesla-proxy
 ├── setup-proxy.sh           ← Run once to generate certs
 ├── .env                     ← Your credentials (create from .env.example)
 ├── .env.example             ← Template for .env
-├── tesla-tokens.json        ← OAuth tokens (auto-generated)
+├── .gitignore               ← What to ignore when pushing to github
+├── .gitattributes           ← Git setting to prevent different line returns
+├── tesla-tokens.json        ← OAuth tokens (auto-generated by go code)
 ├── private-key.pem          ← Your private key for signing
 ├── public-key.pem           ← Public key (shared with vehicle)
+├── helm/                    ← Files to deploy to kind with helm
 ├── config/                  ← Auto-generated by setup-proxy.sh
 │   ├── tls-cert.pem         ← TLS certificate
 │   ├── tls-key.pem          ← TLS private key
 │   └── fleet-key.pem        ← Copy of private key
 ├── go.mod                   ← Go dependencies
-├── README.md                ← This file
-└── SETUP.md                 ← Quick reference
+└──README.md                ← This file
 ```
 
 ---
@@ -288,358 +302,15 @@ Vehicle not found or unreachable:
 
 ---
 
-## 🚀 Usage Examples
-
-**Basic usage (interactive menu):**
-```bash
-go run tesla-cli.go
-```
-
-**To stop the proxy:**
-```bash
-docker-compose down
-```
-
-**View proxy logs:**
-```bash
-docker-compose logs -f tesla-proxy
-```
-
-**Force new authentication:**
-```bash
-rm tesla-tokens.json
-go run tesla-cli.go
-```
-
----
-
-## 💻 Add More Commands
-
-Edit `tesla-cli.go` and add new menu options. Example:
-
-```go
-case "6":
-    fmt.Println("🚪 Opening trunk...")
-    if err := sendCommand(vehicleID, tokens.AccessToken, "open_trunk", proxyURL, map[string]interface{}{}); err != nil {
-        fmt.Printf("❌ Error: %v\n", err)
-    } else {
-        fmt.Println("✅ Trunk opened!")
-    }
-```
-
-See `sendCommand()` function in `tesla-cli.go` for the pattern.
-
----
-
-## 🔒 Security
-
-- ✅ **End-to-end encryption** with your vehicle
-- ✅ **Cryptographic signing** with your private key
-- ✅ **OAuth 2.0** authentication
-- ✅ **Self-signed TLS** for local proxy (safe for localhost)
-- ✅ **No plaintext credentials** in logs
-- ✅ **Token expiration** handled automatically
-
----
-
 ## 📖 References
 
 - [Tesla Vehicle Command SDK](https://github.com/teslamotors/vehicle-command) - Official Go SDK
 - [Tesla Fleet API Docs](https://developer.tesla.com/docs/fleet-api) - Complete API reference
 - [Vehicle Command Protocol](https://github.com/teslamotors/vehicle-command/blob/main/README.md) - Technical details
-
----
-
-## ✅ Current Status
-
-**Working:**
-- ✅ OAuth 2.0 browser-based authentication
-- ✅ Token caching and reuse
-- ✅ Lock/Unlock doors
-- ✅ Sentry mode control
-- ✅ Interactive menu interface
-- ✅ Cryptographically signed commands
-- ✅ End-to-end vehicle encryption
-- ✅ Docker containerized proxy
-
-**Future Ideas:**
-- [ ] Add climate, charging, trunk commands
-- [ ] Support multiple vehicles
-- [ ] REST API wrapper
-- [ ] Web dashboard
-- [ ] Command scheduling
+- [First Tutorial to Get Vehicle Data](https://github.com/qcteslaguy/tesla-fleet-api-demo)
 
 ---
 
 ## 🤝 Contributing
 
 Found a bug? Have improvements? Open an issue or PR!
-
----
-
-## 📄 License
-
-MIT
-  - Displays interactive command menu to test lock, unlock, and sentry mode
-  - No AWS or DynamoDB required
-
-**Typical output:**
-```
-🔧 Tesla Command SDK Integration Test (Local Mode)
-Vehicle ID: 3744191383554437
-
-Which command would you like to simulate sending?
-1. Lock Doors
-2. Unlock Doors
-3. Set Sentry Mode
-4. Quit
-Enter choice [1-4]: 
-```
-
-## Example Code: Sending Lock/Unlock Commands
-
-Example TypeScript code for SDK usage:
-```typescript
-import { VehicleCommandSDK } from '@teslamotors/vehicle-command';
-
-const sdk = new VehicleCommandSDK({
-  vehicleId: '<your-vehicle-id>',
-  accessToken: '<access-token>',
-  refreshToken: '<refresh-token>'
-});
-
-// Unlock the vehicle
-await sdk.unlockDoors();
-
-// Lock the vehicle
-await sdk.lockDoors();
-```
-
----
-
-## Build and Run the Go App
-
-To build:
-```bash
-go build -o tesla-cmd-demo test-tesla-command-sdk-local.go
-```
-To run:
-```bash
-VEHICLE_ID=<your-vehicle-id> ./tesla-cmd-demo
-```
-
----
-
-## Before/After Migration Example
-
-**Before (Deprecated REST API):**
-```typescript
-// backend/src/tesla/tesla-api.ts
-async setSentryMode(vehicleId: string, enable: boolean) {
-  return this.makeRequest('POST', `/api/1/vehicles/${vehicleId}/command/set_sentry_mode`, {
-    on: enable
-  })
-  // Returns 403: "Tesla Vehicle Command Protocol required"
-}
-```
-
-**After (SDK):**
-```typescript
-// backend/src/tesla/tesla-api.ts
-async setSentryMode(vehicleId: string, enable: boolean) {
-  const sdk = this.initializeSDK(vehicleId)
-  return sdk.setSentryMode(enable)
-  // Works! Returns success response
-}
-
-private initializeSDK(vehicleId: string) {
-  return new TeslaVehicleCommandSDK({
-    vehicleId,
-    accessToken: this.tokens.accessToken,
-    refreshToken: this.tokens.refreshToken
-  })
-}
-```
-
----
-
-## Commands Ready to Implement
-
-All 14 commands are ready immediately after SDK migration:
-```json
-[
-  { "name": "SetSentryMode", "params": "enable: boolean" },
-  { "name": "LockDoors", "params": "none" },
-  { "name": "UnlockDoors", "params": "none" },
-  { "name": "StartCharging", "params": "none" },
-  { "name": "StopCharging", "params": "none" },
-  { "name": "SetChargeLimit", "params": "percent: number" },
-  { "name": "SetClimateTemperature", "params": "temp: number" },
-  { "name": "TurnOnClimate", "params": "none" },
-  { "name": "TurnOffClimate", "params": "none" },
-  { "name": "OpenTrunk", "params": "type: 'front'|'rear'" },
-  { "name": "CloseTrunk", "params": "type: 'front'|'rear'" },
-  { "name": "OpenWindow", "params": "percent: number" },
-  { "name": "CloseWindow", "params": "none" },
-  { "name": "UpdateChargeLimit", "params": "percent: number" }
-]
-```
-
----
-
-## Troubleshooting
-
-### Vehicle Command Protocol Error (HTTP 403)
-
-**Problem**: When sending commands, you receive:
-```
-❌ Error: API returned status 403: Tesla Vehicle Command Protocol required
-```
-
-**Why**: Tesla deprecated the REST API command endpoint and now requires the **Vehicle Command Protocol**, which uses cryptographic signing to authenticate commands instead of simple Bearer tokens.
-
-**Solution: Use the vehicle-command HTTP Proxy (Recommended) ⭐**
-
-Tesla provides an official HTTP proxy that handles all protocol signing for you automatically:
-
-1. **Install Node.js** (if you don't have it):
-   - Download from https://nodejs.org/
-   - Or use `brew install node` on macOS, `choco install nodejs` on Windows
-
-2. **Install the vehicle-command proxy**:
-   ```bash
-   npm install -g @teslamotors/vehicle-command
-   ```
-
-3. **Start the proxy in a new terminal**:
-   ```bash
-   vehicle-command http-server --port 3000
-   ```
-   Output should show:
-   ```
-   Server running on http://localhost:3000
-   ```
-
-4. **Update the Go code** to use the proxy instead of direct Tesla API:
-   - Open `test-tesla-command-sdk-local.go`
-   - Find the line: `url := fmt.Sprintf("https://fleet-api.prd.na.vn.cloud.tesla.com/api/1/vehicles/%s/command/%s", vehicleID, command)`
-   - Change it to: `url := fmt.Sprintf("http://localhost:8080/api/1/vehicles/%s/command/%s", vehicleID, command)`
-
-5. **Run the program again**:
-   ```bash
-   go run test-tesla-command-sdk-local.go
-   ```
-
-6. **Send commands** - they should now work! The proxy handles all the protocol signing automatically.
-
-**Example flow:**
-```
-Your Program → HTTP Request → vehicle-command Proxy → Protocol Signing → Tesla API → Vehicle
-```
-
----
-
-### Demo Issues
-- **Problem**: Command not found
-  ```
-bash: go: command not found
-  ```
-  **Solution**: Install Go from https://golang.org/dl
-
-- **Problem**: OAuth code exchange fails
-  ```
-Token request failed: ...
-  ```
-  **Solutions:**
-  1. Verify CLIENT_ID and CLIENT_SECRET are correct
-  2. Verify REDIRECT_URI matches what's registered in your Tesla app
-  3. Check that the authorization code hasn't expired (they expire quickly)
-
-- **Problem**: Browser doesn't open automatically
-  ```
-  No browser opened, but URL is printed
-  ```
-  **Solution**: Manually copy and paste the printed URL into your browser
-
----
-
-## Environment Variables
-
-Optional - if you create a `.env` file, the program will use it:
-```bash
-TESLA_CLIENT_ID=your_client_id
-TESLA_CLIENT_SECRET=your_client_secret
-TESLA_REDIRECT_URI=http://localhost:8080/callback
-VEHICLE_ID=your_vehicle_id
-```
-
-If `.env` is not present, the program will prompt you for these values interactively.
-
----
-
-## Progress Checklist
-
-- [x] Interactive demo script created
-- [x] Token setup integrated (no AWS required)
-- [x] Command menu implemented (Lock, Unlock, Set Sentry Mode)
-- [x] Documentation complete
-- [ ] SDK implementation in backend (your next step)
-- [ ] All 14 commands tested
-- [ ] Staging deployment
-- [ ] Production deployment
-
----
-
-## Next Steps
-
-### Immediate (Right Now)
-```bash
-# 1. Run the interactive demo
-VEHICLE_ID=<your-vehicle-id> go run test-tesla-command-sdk-local.go
-
-# 2. Follow the prompts to set up OAuth tokens
-# 3. Select commands from the menu to test
-```
-
-### Soon (This Week)
-1. Integrate the SDK into your backend
-2. Implement actual lock/unlock/sentry mode commands
-3. Connect to real Tesla vehicles for testing
-4. Write unit tests
-
-### Later (After Implementation)
-1. Deploy to staging
-2. Test with real vehicle
-3. Deploy to production
-
----
-
-## Architecture Overview
-
-```
-Current (Broken):
-  Admin UI → Backend Handler → HTTP REST API → 403 Error ❌
-
-After SDK Migration:
-  Admin UI → Backend Handler → Vehicle Command SDK → Vehicle ✅
-                              ↓
-                       Local Tokens (JSON file)
-```
-
----
-
-## Resources
-
-- **Tesla Vehicle Command SDK**: https://github.com/teslamotors/vehicle-command
-- **SDK Documentation**: Included in repository
-- **AWS DynamoDB Docs**: https://docs.aws.amazon.com/dynamodb/
-- **This Project's Backend**: [backend/README.md](../backend/README.md)
-- **API Configuration**: [docs/API_CONFIGURATION.md](../docs/API_CONFIGURATION.md)
-
----
-
-**Last Updated**: January 31, 2026  
-**Status**: Ready for SDK Migration  
-**Estimated Implementation Time**: 2-3 hours
-
-**Happy Hacking!**
