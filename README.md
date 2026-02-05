@@ -309,6 +309,9 @@ Vehicle not found or unreachable:
 - [Tesla Fleet API Docs](https://developer.tesla.com/docs/fleet-api) - Complete API reference
 - [Vehicle Command Protocol](https://github.com/teslamotors/vehicle-command/blob/main/README.md) - Technical details
 - [First Tutorial to Get Vehicle Data](https://github.com/qcteslaguy/tesla-fleet-api-demo)
+- [First Tutorial YouTube Video](https://youtu.be/qd6MdAgsOrM)
+- [My Website](https://qcteslaguy.com)
+- [My YouTube Channel](https://youtube.com/@quadcitiesteslaguy)
 
 ---
 
